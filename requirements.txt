@@ -1,0 +1,8 @@
+torch
+numpy
+music21
+pretty_midi
+mido
+matplotlib
+tqdm
+streamlit
