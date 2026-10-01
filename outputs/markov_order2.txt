@@ -1,0 +1,4 @@
+training order-2 Markov model on 3,240,519 tokens...
+val : {'acc': 0.1782118807920528, 'loss': np.float64(3.953806548415959), 'ppl': 52.133438067890204}
+test: {'acc': 0.1971131408760584, 'loss': np.float64(3.948653095974577), 'ppl': 51.865461968320986}
+saved models/markov.pkl
