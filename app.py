@@ -24,7 +24,7 @@ st.title("🎹 Generating Music with Machine Learning")
 st.caption("UE24CS352A mini-project · Markov baseline vs LSTM trained on MAESTRO piano MIDI")
 
 models = []
-if LSTM_PATH.exists():
+if LSTM_PATH.exists() or LSTM_PATH.with_suffix(".npz").exists():
     models.append("LSTM")
 if MARKOV_PATH.exists():
     models.append("Markov baseline")
