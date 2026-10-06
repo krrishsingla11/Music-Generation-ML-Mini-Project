@@ -16,7 +16,5 @@ We created a Google Form survey presenting participants with 6 short (15-second)
 
 For each clip, participants were asked to guess if the music was "Human or Machine" and rate its musicality on a scale from 1 (Random noise) to 5 (Highly musical/coherent). 
 
-**Results (Pending Data):**
-*(Note: Fill this in once your 20+ responses are collected!)*
-* **LSTM vs Markov:** Participants correctly identified the Markov model as a machine X% of the time, noting its lack of long-term harmonic structure. The LSTM proved more convincing, deceiving X% of listeners.
-* **Musicality Score:** The LSTM achieved an average musicality score of X/5, outperforming the baseline (Y/5) and approaching the human benchmark (Z/5).
+**Results (pending data):**
+Complete the results after at least 20 responses have been collected. Report machine-guess rate and mean musicality separately for Markov, LSTM, and MAESTRO clips. The calculation layout is provided in `docs/survey_results_template.md`.
