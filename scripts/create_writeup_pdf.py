@@ -1,5 +1,10 @@
 """Create the final two-page project write-up PDF."""
+import json
 from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -18,7 +23,21 @@ from reportlab.platypus import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "output" / "pdf" / "music_generation_writeup.pdf"
+OUT = ROOT / "docs" / "music_generation_writeup.pdf"
+RESULTS = ROOT / "outputs" / "results.json"
+SURVEY = ROOT / "outputs" / "survey_results.json"
+LOG = ROOT / "outputs" / "lstm_log_8000.json"
+PLOT = ROOT / "outputs" / "plots" / "lstm_loss.png"
+
+
+def make_plot():
+    log = json.loads(LOG.read_text())["log"]
+    PLOT.parent.mkdir(parents=True, exist_ok=True)
+    plt.figure(figsize=(5, 3.3))
+    plt.plot([r["step"] for r in log], [r["train_loss"] for r in log], label="train")
+    plt.plot([r["step"] for r in log], [r["val_loss"] for r in log], label="validation")
+    plt.xlabel("training step"); plt.ylabel("cross-entropy"); plt.legend(); plt.tight_layout()
+    plt.savefig(PLOT, dpi=150); plt.close()
 
 
 def p(text, style):
@@ -48,6 +67,7 @@ def build():
         "Small", parent=body, fontSize=7.2, leading=8.8, textColor=colors.HexColor("#4b5563"),
     )
     cell = ParagraphStyle("Cell", parent=body, fontSize=7.7, leading=9, wordWrap="CJK")
+    cellh = ParagraphStyle("CellH", parent=cell, textColor=colors.white)
 
     doc = SimpleDocTemplate(
         str(OUT), pagesize=A4, rightMargin=0.55 * inch, leftMargin=0.55 * inch,
@@ -78,12 +98,18 @@ def build():
         ),
         p("4. Results", h1),
     ]
-    results = [
-        [p("Model", cell), p("Test loss", cell), p("Perplexity", cell), p("Accuracy", cell)],
-        [p("Order-2 Markov", cell), p("3.9487", cell), p("51.87", cell), p("19.71%", cell)],
-        [p("LSTM", cell), p("2.3667", cell), p("10.66", cell), p("32.85%", cell)],
-    ]
-    table = Table(results, colWidths=[2.4 * inch, 1.25 * inch, 1.25 * inch, 1.25 * inch])
+    if not RESULTS.exists():
+        raise SystemExit("outputs/results.json missing - run `python -m src.evaluate` first")
+    res = json.loads(RESULTS.read_text())
+    prot, models = res["protocol"], res["models"]
+    mk = next(m for m in models if m["name"].startswith("Markov (order 2"))
+    ls = next(m for m in models if m["name"].startswith("LSTM"))
+    if not (ls["ppl"] < mk["ppl"] and ls["acc"] > mk["acc"]):
+        raise SystemExit("LSTM does not beat Markov in outputs/results.json - the write-up text claims it does; edit the text first")
+    results = [[p("Model", cellh), p("Test loss", cellh), p("Perplexity", cellh), p("Accuracy", cellh)]]
+    for m in models:
+        results.append([p(m["name"], cell), p(f"{m['loss']:.4f}", cell), p(f"{m['ppl']:.2f}", cell), p(f"{m['acc']*100:.2f}%", cell)])
+    table = Table(results, colWidths=[2.9 * inch, 1.1 * inch, 1.1 * inch, 1.1 * inch])
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8f1239")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -96,23 +122,33 @@ def build():
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
     story += [table, Spacer(1, 5), p(
-        "The LSTM performs better on every reported next-token metric. Its lower perplexity means it assigns higher probability to held-out token sequences. The Markov model is simple and interpretable, but exact short contexts are sparse in polyphonic music; the LSTM can generalize patterns beyond an exact two-token lookup.", body,
+        f"All models are scored on the same {prot['targets_per_model']:,} target tokens: the held-out test pieces ({prot['test_tokens']:,} tokens) are cut into {prot['windows']:,} non-overlapping windows of {prot['window']} tokens, and every token after the first in a window is a prediction target. The LSTM sees the window so far, the Markov model its last two tokens. The LSTM performs better on every metric. Its lower perplexity means it assigns higher probability to held-out token sequences. The Markov model is simple and interpretable, but exact short contexts are sparse in polyphonic music; the LSTM can generalize beyond an exact two-token lookup.", body,
     )]
-    plot = ROOT / "outputs" / "plots" / "lstm_loss.png"
+    make_plot()
+    plot = PLOT
     if plot.exists():
-        img = Image(str(plot), width=3.45 * inch, height=2.3 * inch)
+        img = Image(str(plot), width=3.2 * inch, height=2.1 * inch)
         story += [img, p("Figure 1. LSTM training and validation cross-entropy.", small)]
 
+    if SURVEY.exists():
+        sv = json.loads(SURVEY.read_text())
+        parts = []
+        for name, d in sv["sources"].items():
+            parts.append(f"{name}: judged machine in {d['machine_rate']*100:.0f}% of {d['votes']} votes, mean musicality {d['mean_musicality']:.2f}/5")
+        survey_text = (f"A blind listening survey ({sv['responses']} responses, six 15-second clips of equal loudness: two human, two Markov, two LSTM) gave: "
+                       + "; ".join(parts) + ".")
+    else:
+        survey_text = ("A blind listening survey (six equal-length clips: two human, two Markov, two LSTM) was designed, but no responses are reported here.")
     story += [PageBreak(), p("5. Generation and evaluation", h1), p(
-        "Both models generate new token sequences that are decoded into MIDI files. The repository includes generated Markov and LSTM samples in outputs/midi/ and a Streamlit application for selecting a model, controlling generation length and temperature, listening to synthesized audio, viewing a piano roll, and downloading the MIDI result.", body,
+        "Both models generate new token sequences that are decoded into MIDI files. Samples are written to outputs/midi/ by python -m src.generate, and the repository includes a Streamlit application for selecting a model, controlling generation length and temperature, listening to synthesized audio, viewing a piano roll, and downloading the MIDI result.", body,
     ), p(
-        "The numerical evaluation measures next-token prediction, while music quality is not fully captured by loss or accuracy. A blind listening survey has been prepared with human, Markov, and LSTM clips. Survey results are pending and should be added after responses are collected.", body,
+        "The numerical evaluation measures next-token prediction, while music quality is not fully captured by loss or accuracy. " + survey_text + "", body,
     ), p("6. Conclusion", h1), p(
-        "The completed experiment shows that the LSTM is a stronger next-token predictor than the order-2 Markov baseline on this dataset: accuracy improves from 19.71% to 32.85%, and perplexity decreases from 51.87 to 10.66. This improvement does not automatically prove that the LSTM creates better music, because musical quality also depends on repetition, harmony, phrasing, dynamics, and listener preference.", body,
+        "The completed experiment shows that the LSTM is a stronger next-token predictor than the order-2 Markov baseline on this dataset: accuracy improves from " + f"{mk['acc']*100:.2f}% to {ls['acc']*100:.2f}%, and perplexity decreases from {mk['ppl']:.2f} to {ls['ppl']:.2f}" + ". This improvement does not automatically prove that the LSTM creates better music, because musical quality also depends on repetition, harmony, phrasing, dynamics, and listener preference.", body,
     ), p("7. Limitations and future work", h1), p(
-        "The current representation models pitch, note-off events, and timing, but does not explicitly model expressive velocity, key, meter, or rich multi-instrument structure. The generated audio uses a simple piano-like synthesizer. Future work could add velocity and chord features, use a more consistent full-test evaluation protocol, and conduct a larger listener study. A Transformer could also be explored after the two-model comparison is complete.", body,
+        "The current representation models pitch, note-off events, and timing, but does not explicitly model expressive velocity, key, meter, or rich multi-instrument structure. The generated audio uses a simple piano-like synthesizer. Future work could add velocity and chord features, and conduct a larger listener study. A Transformer could also be explored after the two-model comparison is complete.", body,
     ), p("8. Reproducibility", h1), p(
-        "Install dependencies with pip install -r requirements.txt. Run python -m src.preprocess --raw data/raw/maestro --max-files 200, then python -m src.markov --order 2 and python -m src.train_lstm --steps 8000. Generate samples with python -m src.generate --model markov --tokens 1000 or --model lstm --tokens 1000. Launch the demonstration with streamlit run app.py.", body,
+        "Install dependencies with pip install -r requirements.txt. Run python -m src.preprocess --raw data/raw/maestro --max-files 200, then python -m src.markov --order 2 and python -m src.train_lstm --steps 8000 (torch is needed only for training; evaluation, generation and the demo run from the exported numpy weights in models/lstm.npz). Reproduce the table with python -m src.evaluate, generate samples with python -m src.generate, and launch the demonstration with streamlit run app.py.", body,
     ), Spacer(1, 8), p("Project repository structure and experiment details are documented in README.md.", small)]
     doc.build(story)
     print(OUT)

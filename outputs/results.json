@@ -1,0 +1,29 @@
+{
+  "protocol": {
+    "test_tokens": 363359,
+    "window": 256,
+    "windows": 1419,
+    "targets_per_model": 361845,
+    "train_tokens": 3240519
+  },
+  "models": [
+    {
+      "name": "Unigram (no context)",
+      "loss": 4.480964199231702,
+      "ppl": 88.31978950745248,
+      "acc": 0.11886028548135251
+    },
+    {
+      "name": "Markov (order 2)",
+      "loss": 3.8965866015858204,
+      "ppl": 49.23410633801542,
+      "acc": 0.18576738658818
+    },
+    {
+      "name": "LSTM (2 layers, 256 hidden, 8000 steps)",
+      "loss": 2.3981920534780765,
+      "ppl": 11.003265071957937,
+      "acc": 0.32171233539222593
+    }
+  ]
+}

@@ -41,9 +41,10 @@ with st.sidebar:
     topk = st.slider("Top-k (LSTM only)", 5, 100, 20) if model_name == "LSTM" else 0
     seed_val = st.number_input("Random seed", 0, 99999, 42)
     st.divider()
-    log = ROOT / "outputs" / "lstm_log.json"
-    if log.exists():
-        t = json.loads(log.read_text()).get("test")
+    res_file = ROOT / "outputs" / "results.json"
+    if res_file.exists():
+        rows = json.loads(res_file.read_text()).get("models", [])
+        t = next((r for r in rows if r["name"].startswith("LSTM")), None)
         if t:
             st.subheader("LSTM test scores")
             st.metric("Perplexity", f"{t['ppl']:.1f}")
